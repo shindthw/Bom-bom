@@ -1,0 +1,141 @@
+--==================================================
+-- SHIFT LOCK BUTTON (PLUGIN VERSION) - AUTO TOGGLE
+--==================================================
+
+local shared = odh_shared_plugins
+
+local shift_section = shared.AddSection("SHIFT LOCK BUTTON")
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- States
+local ScreenGui
+local Button
+local dragging = false
+local dragStart
+local startPos
+local shiftEnabled = false
+local lockDragWhenEnabled = false
+
+--==================================================
+-- UI CREATION
+--==================================================
+local function CreateShiftButton()
+	if ScreenGui then ScreenGui:Destroy() end
+
+	ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "ShiftLockPluginGui"
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.Parent = game:GetService("CoreGui")
+
+	Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(0, 60, 0, 60)
+	Button.Position = UDim2.new(0, 20, 0, 200)
+	Button.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	Button.Text = "SHIFT\nOFF"
+	Button.TextColor3 = Color3.fromRGB(255,255,255)
+	Button.Font = Enum.Font.GothamBold
+	Button.TextSize = 12
+	Button.Parent = ScreenGui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = Button
+end
+
+--==================================================
+-- REAL SHIFT LOCK (SIMULATES ROBLOX BUTTON)
+--==================================================
+local function ToggleRealShiftLock()
+	local playerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+	local playerModule = require(playerScripts:WaitForChild("PlayerModule"))
+	local controller = playerModule:GetMouseLockController()
+
+	if controller then
+		controller:OnMouseLockToggled()
+	end
+end
+
+local function SetShiftLock(state)
+	if shiftEnabled == state then return end
+	shiftEnabled = state
+
+	ToggleRealShiftLock()
+
+	if state then
+		Button.Text = "SHIFT\nON"
+		Button.BackgroundColor3 = Color3.fromRGB(0,170,255)
+	else
+		Button.Text = "SHIFT\nOFF"
+		Button.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	end
+end
+
+--==================================================
+-- BUTTON EVENTS
+--==================================================
+local function SetupButton()
+	Button.MouseButton1Click:Connect(function()
+		SetShiftLock(not shiftEnabled)
+	end)
+
+	-- Drag (PC + Mobile)
+	Button.InputBegan:Connect(function(input)
+		if lockDragWhenEnabled and shiftEnabled then return end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = Button.Position
+		end
+	end)
+
+	Button.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			Button.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	Button.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+end
+
+--==================================================
+-- PLUGIN OPTIONS
+--==================================================
+shift_section:AddToggle("Enable Shift Lock Button", function(state)
+	if state then
+		CreateShiftButton()
+		SetupButton()
+		shared.Notify("Shift Lock Button enabled!", 2)
+	else
+		if ScreenGui then
+			ScreenGui:Destroy()
+			ScreenGui = nil
+		end
+		shiftEnabled = false
+		shared.Notify("Shift Lock Button disabled!", 2)
+	end
+end)
+
+shift_section:AddToggle("Lock Button Drag When Active", function(state)
+	lockDragWhenEnabled = state
+end)
+
+print("Shift Lock Button Plugin Loaded (Auto Toggle)!")
